@@ -1,0 +1,149 @@
+---
+title: "Predicting Cinema Ticket Sales"
+date: "`r Sys.Date()`"
+author: Andy Chiv
+output:
+  rmdformats::material:
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    highlight: tango
+    cards: false
+    fig_width: 12
+    fig_height: 8
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message = FALSE)
+options(scipen=999)
+```
+
+# Loading library
+```{r libraries}
+library(interactions)
+library(ggplot2)
+library(dplyr)
+library(readxl)
+```
+
+# Dataset on Cinema Ticket Sales 
+
+```{r}
+cinemaTicket <- read.csv("https://raw.githubusercontent.com/andychiv/cinema-ticket-sales-analysis/main/cinemaTicket.csv")
+```
+
+
+# Data Wrangling
+```{r}
+cin <- cinemaTicket
+cin <- na.omit(cin)
+cin <- cin %>% filter(ticket_use>=0)  # Filter the negative value of ticket_use
+cin$ticket_price <- cin$ticket_price/10000
+cin <- cin %>% filter(ticket_price <16)  # Filter the negative value of ticket_use
+cin$total_sales <- cin$total_sales/10000
+
+```
+
+# Check if there is an association between Sale and Price
+```{r}
+cin$cSale <- cin$total_sales - mean(cin$total_sales)
+cin$cSold <- cin$tickets_sold - mean(cin$tickets_sold)
+cin$cPrice <- cin$ticket_price - mean(cin$ticket_price)
+cin$cShowTime <- cin$show_time - mean(cin$show_time)
+
+reg <- lm(cSale~cPrice, data=cin)
+summary(reg)
+```
+
+Small p-value indicates that there is a stong relationship between Price and Sale
+
+
+# Visualize the association between Price and Sales
+```{r}
+g <- ggplot(data=cin, aes(x=ticket_price, y=total_sales, color=total_sales)) + geom_point()
+g + ggtitle('Association between Ticket Price ($) and Total Ticket Sales ($)') +
+  xlab('Ticket Price ($)')+
+  ylab('Total Ticket Sales ($)') +
+  scale_color_gradient(low="blue", high="red")
+  
+```
+
+
+# Using Dichonomous variable
+
+Let's create a variable called firstHalf refering a period between January and June while 
+nonFirstHalf is from July to December
+
+## Run a regression model on Sale based on Price interacting with firstHalf
+```{r}
+cin <- cin %>% mutate(firstHalf= ifelse(month < 7, yes=1, no=0)) 
+reg <- lm(cSale~cPrice*firstHalf, data=cin)
+summary(reg)
+```
+
+## Visualize the association between Sale and Price*firstHalf (Interaction)
+```{r}
+g <- ggplot(data=cin, aes(x=ticket_price, y=total_sales, color=total_sales)) + geom_point()
+g + ggtitle('Association between Ticket Price ($) and Total Ticket Sales ($)') +
+  xlab('Ticket Price ($)')+
+  ylab('Total Ticket Sales ($)') +
+  scale_color_gradient(low="blue", high="red") +
+  facet_wrap(~firstHalf)
+```
+
+
+## Run a regression model on Sales based on Price interacting with nonFirstHalf
+
+```{r}
+cin <- cin %>% mutate(nonFirstHalf = 1 - firstHalf)
+reg <- lm(cSale~cPrice*nonFirstHalf, data=cin)
+summary(reg)
+```
+
+## Visualize the association between Sale and Price*nonFirstHalf (Interaction)
+```{r}
+g <- ggplot(data=cin, aes(x=ticket_price, y=total_sales, color=total_sales)) + geom_point()
+g + ggtitle('Association between Ticket Price ($) and Total Ticket Sales ($)') +
+  xlab('Ticket Price ($)')+
+  ylab('Total Ticket Sales ($)') +
+  scale_color_gradient(low="blue", high="red") +
+  facet_wrap(~nonFirstHalf)
+```
+
+
+# Spotlight Analysis on ShowTime
+```{r}
+cin$showTimeHi <- cin$cShowTime - sd(cin$cShowTime)   # Shift the data down
+reg <- lm(cSale~cPrice*showTimeHi, data=cin)
+summary(reg)
+```
+
+
+```{r}
+cin$showTimeLo <- cin$cShowTime + sd(cin$cShowTime)   # Shift the data down
+reg <- lm(cSale~cPrice*showTimeLo, data=cin)
+summary(reg)
+```
+
+# Floodlight Analysis
+
+```{r}
+fl <- lm(total_sales ~ ticket_price*show_time , data = cin)
+johnson_neyman(fl, pred = show_time, modx = ticket_price, mod.range=c(1, 60), alpha = 0.05, line.thickness = 1,plot = TRUE, 
+               title = "Johnson-Neyman Plot")
+```
+
+
+# Report
+
+A full report can be found here: 
+
+[Full Report](https://github.com/andychiv/cinema-ticket-sales-analysis/blob/main/Cinema%20Tickets%20Marketing%20Mix%20Report.pdf)
+
+
+
+
+
+
+
+
